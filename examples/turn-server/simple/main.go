@@ -18,6 +18,8 @@ func main() {
 	port := flag.Int("port", 3478, "Listening port.")
 	users := flag.String("users", "", "List of username and password (e.g. \"user=pass,user=pass\")")
 	realm := flag.String("realm", "pion.ly", "Realm (defaults to \"pion.ly\")")
+	minPort := flag.Int("min-port", 65000, "Minimun relay port")
+	maxPort := flag.Int("max-port", 65535, "Maximun relay port")
 	flag.Parse()
 
 	if len(*publicIP) == 0 {
@@ -25,6 +27,8 @@ func main() {
 	} else if len(*users) == 0 {
 		log.Fatalf("'users' is required")
 	}
+
+	log.Printf("min-port: %d, max-port: %d", *minPort, *maxPort)
 
 	// Create a UDP listener to pass into pion/turn
 	// pion/turn itself doesn't allocate any UDP sockets, but lets the user pass them in
@@ -56,9 +60,11 @@ func main() {
 		PacketConnConfigs: []turn.PacketConnConfig{
 			{
 				PacketConn: udpListener,
-				RelayAddressGenerator: &turn.RelayAddressGeneratorStatic{
+				RelayAddressGenerator: &turn.RelayAddressGeneratorForRange{
 					RelayAddress: net.ParseIP(*publicIP), // Claim that we are listening on IP passed by user (This should be your Public IP)
 					Address:      "0.0.0.0",              // But actually be listening on every interface
+					MinPort:      *minPort,
+					MaxPort:      *maxPort,
 				},
 			},
 		},
@@ -66,7 +72,6 @@ func main() {
 	if err != nil {
 		log.Panic(err)
 	}
-
 	// Block until user sends SIGINT or SIGTERM
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
